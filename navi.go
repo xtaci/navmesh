@@ -3,7 +3,7 @@ package navmesh
 import (
 	"errors"
 	_ "fmt"
-	. "misc/vectormath"
+	. "github.com/spate/vectormath"
 )
 
 var (
