@@ -41,6 +41,17 @@ func (th *TriangleHeap) Pop() interface{} {
 	return x
 }
 
+func (th *TriangleHeap) DecreaseKey(id int32, weight float32) {
+	for k := range th.triangles {
+		if th.triangles[k].id == id {
+			th.triangles[k].weight = weight
+			heap.Fix(th, k)
+			println("fixed", id)
+			return
+		}
+	}
+}
+
 type Mesh struct {
 	Vertices  []Point3   // vertices
 	Triangles [][3]int32 // triangles
@@ -98,9 +109,9 @@ func (d *Dijkstra) Run(src_id int32) map[int32]int32 {
 	// visit map
 	visited := make(map[int32]bool)
 
-	// set initial distance to each node as MaxFloat32
+	// set initial distance to a very large value
 	for k := range d.Matrix {
-		dist[k] = math.MaxFloat32
+		dist[k] = 99999
 	}
 
 	// source vertex, the first vertex in Heap
@@ -109,22 +120,24 @@ func (d *Dijkstra) Run(src_id int32) map[int32]int32 {
 
 	for h.Len() > 0 { // for every un-visited vertex, try relaxing the path
 		// pop the min element
-		cur := h.Pop().(WeightedTriangle)
-		if visited[cur.id] {
-			continue
-		}
+		u := h.Pop().(WeightedTriangle)
 		// current known shortest distance to u
-		dist_u := dist[cur.id]
+		dist_u := dist[u.id]
 		// mark the vertex as visited.
-		visited[cur.id] = true
+		visited[u.id] = true
 
 		// for each neighbor v of u:
-		for _, v := range d.Matrix[cur.id] {
-			alt := dist_u + v.weight
+		for _, v := range d.Matrix[u.id] {
+			alt := dist_u + v.weight // from src->u->v
+			if !visited[v.id] {
+				heap.Push(h, WeightedTriangle{v.id, alt})
+			}
 			if alt < dist[v.id] {
 				dist[v.id] = alt
-				prev[v.id] = cur.id
-				heap.Push(h, WeightedTriangle{v.id, alt})
+				prev[v.id] = u.id
+				if !visited[v.id] {
+					h.DecreaseKey(v.id, alt)
+				}
 			}
 		}
 	}
