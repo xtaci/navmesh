@@ -6,7 +6,7 @@ import (
 	"math"
 )
 
-import ()
+const LARGE_NUMBER = 999999
 
 // Triangle Heap
 type WeightedTriangle struct {
@@ -23,7 +23,7 @@ func (th *TriangleHeap) Len() int {
 }
 
 func (th *TriangleHeap) Less(i, j int) bool {
-	return th.triangles[i].weight < th.triangles[j].weight
+	return th.triangles[i].weight > th.triangles[j].weight
 }
 
 func (th *TriangleHeap) Swap(i, j int) {
@@ -44,9 +44,8 @@ func (th *TriangleHeap) Pop() interface{} {
 func (th *TriangleHeap) DecreaseKey(id int32, weight float32) {
 	for k := range th.triangles {
 		if th.triangles[k].id == id {
-			th.triangles[k].weight = weight
-			heap.Fix(th, k)
-			println("fixed", id)
+			heap.Remove(th, k)
+			heap.Push(th, WeightedTriangle{id, weight})
 			return
 		}
 	}
@@ -96,6 +95,9 @@ func intersect(a [3]int32, b [3]int32) []int32 {
 }
 
 func (d *Dijkstra) Run(src_id int32) map[int32]int32 {
+	defer func() {
+		println("run ok")
+	}()
 	// triangle heap
 	h := &TriangleHeap{}
 	heap.Init(h)
@@ -111,11 +113,12 @@ func (d *Dijkstra) Run(src_id int32) map[int32]int32 {
 
 	// set initial distance to a very large value
 	for k := range d.Matrix {
-		dist[k] = 99999
+		dist[k] = LARGE_NUMBER
+		heap.Push(h, WeightedTriangle{k, LARGE_NUMBER})
 	}
 
 	// source vertex, the first vertex in Heap
-	heap.Push(h, WeightedTriangle{src_id, 0})
+	h.DecreaseKey(src_id, 0)
 	dist[src_id] = 0.0
 
 	for h.Len() > 0 { // for every un-visited vertex, try relaxing the path
@@ -129,15 +132,10 @@ func (d *Dijkstra) Run(src_id int32) map[int32]int32 {
 		// for each neighbor v of u:
 		for _, v := range d.Matrix[u.id] {
 			alt := dist_u + v.weight // from src->u->v
-			if !visited[v.id] {
-				heap.Push(h, WeightedTriangle{v.id, alt})
-			}
 			if alt < dist[v.id] {
 				dist[v.id] = alt
 				prev[v.id] = u.id
-				if !visited[v.id] {
-					h.DecreaseKey(v.id, alt)
-				}
+				h.DecreaseKey(v.id, alt)
 			}
 		}
 	}
