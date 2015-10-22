@@ -121,7 +121,8 @@ func (d *Dijkstra) Run(src_id int32) map[int32]int32 {
 		// for each neighbor v of u:
 		for _, v := range d.Matrix[cur.id] {
 			alt := dist_u + v.weight
-			if alt < dist[v.id] && !visited[v.id] {
+			//if alt < dist[v.id] && !visited[v.id] {
+			if alt < dist[v.id] {
 				dist[v.id] = alt
 				prev[v.id] = cur.id
 				heap.Push(h, WeightedTriangle{v.id, alt})

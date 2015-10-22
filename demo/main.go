@@ -20,6 +20,7 @@ type List struct {
 var list List
 var vertices []Point3
 var triangles [][3]int32
+var dijkstra Dijkstra
 
 func main() {
 	f, err := os.Open("mesh.json")
@@ -31,6 +32,7 @@ func main() {
 	}
 	vertices = list.Vertices
 	triangles = list.Triangles
+	dijkstra.CreateMatrixFromMesh(Mesh{vertices, triangles})
 	gl.StartDriver(appMain)
 }
 
@@ -38,9 +40,8 @@ var SCALE_FACTOR = float32(0.15)
 
 func appMain(driver gxui.Driver) {
 	theme := flags.CreateTheme(driver)
-	window := theme.CreateWindow(800, 600, "Polygon")
+	window := theme.CreateWindow(800, 600, "navmesh")
 	canvas := driver.CreateCanvas(math.Size{W: 800, H: 600})
-	window.SetBackgroundBrush(gxui.CreateBrush(gxui.White))
 
 	// mouse
 	isStart := true
@@ -88,7 +89,8 @@ func appMain(driver gxui.Driver) {
 					int(SCALE_FACTOR * vertices[triangles[k][2]].Y),
 				}},
 		}
-		canvas.DrawPolygon(poly, gxui.CreatePen(1, gxui.Red), gxui.CreateBrush(gxui.Yellow))
+		canvas.DrawPolygon(poly, gxui.CreatePen(3, gxui.Gray80), gxui.CreateBrush(gxui.Gray40))
+		//canvas.DrawPolygon(poly, gxui.CreatePen(2, gxui.Red), gxui.CreateBrush(gxui.Yellow))
 	}
 
 	canvas.Complete()
@@ -104,9 +106,7 @@ func route(driver gxui.Driver, src_id, dest_id int32, src, dest Point3) (canvas 
 	}()
 	canvas = driver.CreateCanvas(math.Size{W: 800, H: 600})
 	// Phase 1. Use Dijkstra to find shortest path on Triangles
-	d := Dijkstra{}
-	d.CreateMatrixFromMesh(Mesh{vertices, triangles})
-	path := d.Run(src_id)
+	path := dijkstra.Run(src_id)
 
 	// Phase 2.  construct path indices
 	// Check if this path include src & dest
@@ -121,6 +121,7 @@ func route(driver gxui.Driver, src_id, dest_id int32, src, dest Point3) (canvas 
 	if cur_id != src_id && src_id != dest_id { // incomplete route
 		return canvas
 	}
+	log.Println(path_triangle)
 
 	// Phase 3. use Navmesh to construct line
 	start, end := &Point3{X: src.X, Y: src.Y}, &Point3{X: dest.X, Y: dest.Y}
