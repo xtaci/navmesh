@@ -1,74 +1,46 @@
 package main
 
 import (
+	"encoding/json"
 	"github.com/google/gxui"
 	"github.com/google/gxui/drivers/gl"
 	"github.com/google/gxui/math"
 	"github.com/google/gxui/samples/flags"
 	. "github.com/spate/vectormath"
 	. "github.com/xtaci/navmesh"
+	"log"
+	"os"
 )
 
-var (
-	vertices = []Point3{{},
-		{X: 0, Y: 0},
-		{X: 0, Y: 1},
-		{X: 1, Y: 0},
-		{X: 1, Y: 1},
-		{X: 2, Y: 0},
-		{X: 2, Y: 1},
-		{X: 3, Y: 0},
-		{X: 3, Y: 1},
-		{X: 3, Y: 2},
-		{X: 2, Y: 2},
-		{X: 2, Y: 3},
-		{X: 3, Y: 3},
-		{X: 4, Y: 3},
-		{X: 4, Y: 2}, //14
-		{X: 5, Y: 3},
-		{X: 5, Y: 2},
-		{X: 5, Y: 1},
-		{X: 4, Y: 1},
-		{X: 6, Y: 1},
-		{X: 6, Y: 2},
-		{X: 6, Y: 0},
-		{X: 5, Y: 0},
-	}
+type List struct {
+	Vertices  []Point3
+	Triangles [][3]int32
+}
 
-	triangles = [][3]int32{
-		{1, 2, 3},
-		{2, 3, 4},
-		{3, 4, 5},
-		{4, 5, 6},
-		{5, 6, 7},
-		{6, 7, 8},
-		{6, 8, 10},
-		{10, 8, 9},
-		{10, 9, 11},
-		{9, 11, 12},
-		{9, 12, 14},
-		{12, 13, 14},
-		{13, 14, 16},
-		{13, 15, 16},
-		{14, 16, 17},
-		{14, 17, 18},
-		{16, 17, 19},
-		{16, 20, 19},
-		{17, 19, 21},
-		{17, 21, 22},
-	}
-)
+var list List
+var vertices []Point3
+var triangles [][3]int32
 
 func main() {
+	f, err := os.Open("mesh.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := json.NewDecoder(f).Decode(&list); err != nil {
+		log.Fatal(err)
+	}
+	vertices = list.Vertices
+	triangles = list.Triangles
 	gl.StartDriver(appMain)
 }
 
-const SCALE_FACTOR = 100
+var SCALE_FACTOR = float32(0.15)
 
 func appMain(driver gxui.Driver) {
 	theme := flags.CreateTheme(driver)
 	window := theme.CreateWindow(800, 600, "Polygon")
 	canvas := driver.CreateCanvas(math.Size{W: 800, H: 600})
+	window.SetBackgroundBrush(gxui.CreateBrush(gxui.White))
 
 	// mouse
 	isStart := true
@@ -77,9 +49,6 @@ func appMain(driver gxui.Driver) {
 	window.OnMouseDown(func(me gxui.MouseEvent) {
 		pt := Point3{X: float32(me.Point.X) / SCALE_FACTOR, Y: float32(me.Point.Y) / SCALE_FACTOR}
 		id := getTriangleId(pt)
-		if id == -1 {
-			return
-		}
 		if isStart {
 			src_id = id
 			src = pt
@@ -88,10 +57,12 @@ func appMain(driver gxui.Driver) {
 			dest = pt
 		}
 		if !isStart {
-			canvas := route(driver, src_id, dest_id, src, dest)
-			image := theme.CreateImage()
-			image.SetCanvas(canvas)
-			window.AddChild(image)
+			if id != -1 {
+				canvas := route(driver, src_id, dest_id, src, dest)
+				image := theme.CreateImage()
+				image.SetCanvas(canvas)
+				window.AddChild(image)
+			}
 		}
 		isStart = !isStart
 	})
@@ -101,26 +72,23 @@ func appMain(driver gxui.Driver) {
 		poly := []gxui.PolygonVertex{
 			gxui.PolygonVertex{
 				Position: math.Point{
-					SCALE_FACTOR * int(vertices[triangles[k][0]].X),
-					SCALE_FACTOR * int(vertices[triangles[k][0]].Y),
-				},
-				RoundedRadius: 0},
+					int(SCALE_FACTOR * vertices[triangles[k][0]].X),
+					int(SCALE_FACTOR * vertices[triangles[k][0]].Y),
+				}},
 
 			gxui.PolygonVertex{
 				Position: math.Point{
-					SCALE_FACTOR * int(vertices[triangles[k][1]].X),
-					SCALE_FACTOR * int(vertices[triangles[k][1]].Y),
-				},
-				RoundedRadius: 0},
+					int(SCALE_FACTOR * vertices[triangles[k][1]].X),
+					int(SCALE_FACTOR * vertices[triangles[k][1]].Y),
+				}},
 
 			gxui.PolygonVertex{
 				Position: math.Point{
-					SCALE_FACTOR * int(vertices[triangles[k][2]].X),
-					SCALE_FACTOR * int(vertices[triangles[k][2]].Y),
-				},
-				RoundedRadius: 0},
+					int(SCALE_FACTOR * vertices[triangles[k][2]].X),
+					int(SCALE_FACTOR * vertices[triangles[k][2]].Y),
+				}},
 		}
-		canvas.DrawPolygon(poly, gxui.CreatePen(1, gxui.Red), gxui.TransparentBrush)
+		canvas.DrawPolygon(poly, gxui.CreatePen(1, gxui.Red), gxui.CreateBrush(gxui.Yellow))
 	}
 
 	canvas.Complete()
@@ -150,7 +118,7 @@ func route(driver gxui.Driver, src_id, dest_id int32, src, dest Point3) (canvas 
 			break
 		}
 	}
-	if cur_id != src_id { // incomplete route
+	if cur_id != src_id && src_id != dest_id { // incomplete route
 		return canvas
 	}
 
@@ -166,8 +134,7 @@ func route(driver gxui.Driver, src_id, dest_id int32, src, dest Point3) (canvas 
 			Position: math.Point{
 				int(SCALE_FACTOR * start.X),
 				int(SCALE_FACTOR * start.Y),
-			},
-			RoundedRadius: 0})
+			}})
 
 	for k := range r.Line {
 		poly = append(poly,
@@ -175,18 +142,16 @@ func route(driver gxui.Driver, src_id, dest_id int32, src, dest Point3) (canvas 
 				Position: math.Point{
 					int(SCALE_FACTOR * r.Line[k].X),
 					int(SCALE_FACTOR * r.Line[k].Y),
-				},
-				RoundedRadius: 0})
+				}})
 	}
 	poly = append(poly,
 		gxui.PolygonVertex{
 			Position: math.Point{
 				int(SCALE_FACTOR * end.X),
 				int(SCALE_FACTOR * end.Y),
-			},
-			RoundedRadius: 0})
+			}})
 
-	canvas.DrawLines(poly, gxui.CreatePen(1, gxui.Green))
+	canvas.DrawLines(poly, gxui.CreatePen(2, gxui.Green))
 	return
 }
 
