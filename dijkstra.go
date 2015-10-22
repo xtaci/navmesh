@@ -124,6 +124,9 @@ func (d *Dijkstra) Run(src_id int32) map[int32]int32 {
 	for h.Len() > 0 { // for every un-visited vertex, try relaxing the path
 		// pop the min element
 		u := h.Pop().(WeightedTriangle)
+		if visited[u.id] {
+			continue
+		}
 		// current known shortest distance to u
 		dist_u := dist[u.id]
 		// mark the vertex as visited.
