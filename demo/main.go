@@ -1,13 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"github.com/google/gxui"
 	"github.com/google/gxui/drivers/gl"
 	"github.com/google/gxui/math"
 	"github.com/google/gxui/samples/flags"
 	. "github.com/spate/vectormath"
-	//. "github.com/xtaci/navmesh"
+	. "github.com/xtaci/navmesh"
 )
 
 var (
@@ -64,17 +63,37 @@ func main() {
 	gl.StartDriver(appMain)
 }
 
+const SCALE_FACTOR = 100
+
 func appMain(driver gxui.Driver) {
 	theme := flags.CreateTheme(driver)
 	window := theme.CreateWindow(800, 600, "Polygon")
-	window.SetScale(100)
-	canvas := driver.CreateCanvas(math.Size{W: 1000, H: 1000})
+	canvas := driver.CreateCanvas(math.Size{W: 800, H: 600})
 
 	// mouse
-	//var isStart bool
-	//	var src_id, dest_id int // source & dest triangle id
+	isStart := true
+	var src_id, dest_id int32 // source & dest triangle id
+	var src, dest Point3
 	window.OnMouseDown(func(me gxui.MouseEvent) {
-		getTriangleId(driver, me.Point, me.Point)
+		pt := Point3{X: float32(me.Point.X) / SCALE_FACTOR, Y: float32(me.Point.Y) / SCALE_FACTOR}
+		id := getTriangleId(pt)
+		if id == -1 {
+			return
+		}
+		if isStart {
+			src_id = id
+			src = pt
+		} else {
+			dest_id = id
+			dest = pt
+		}
+		if !isStart {
+			canvas := route(driver, src_id, dest_id, src, dest)
+			image := theme.CreateImage()
+			image.SetCanvas(canvas)
+			window.AddChild(image)
+		}
+		isStart = !isStart
 	})
 
 	// draw mesh
@@ -82,26 +101,26 @@ func appMain(driver gxui.Driver) {
 		poly := []gxui.PolygonVertex{
 			gxui.PolygonVertex{
 				Position: math.Point{
-					int(vertices[triangles[k][0]].X),
-					int(vertices[triangles[k][0]].Y),
+					SCALE_FACTOR * int(vertices[triangles[k][0]].X),
+					SCALE_FACTOR * int(vertices[triangles[k][0]].Y),
 				},
 				RoundedRadius: 0},
 
 			gxui.PolygonVertex{
 				Position: math.Point{
-					int(vertices[triangles[k][1]].X),
-					int(vertices[triangles[k][1]].Y),
+					SCALE_FACTOR * int(vertices[triangles[k][1]].X),
+					SCALE_FACTOR * int(vertices[triangles[k][1]].Y),
 				},
 				RoundedRadius: 0},
 
 			gxui.PolygonVertex{
 				Position: math.Point{
-					int(vertices[triangles[k][2]].X),
-					int(vertices[triangles[k][2]].Y),
+					SCALE_FACTOR * int(vertices[triangles[k][2]].X),
+					SCALE_FACTOR * int(vertices[triangles[k][2]].Y),
 				},
 				RoundedRadius: 0},
 		}
-		canvas.DrawPolygon(poly, gxui.CreatePen(0.01, gxui.Red), gxui.TransparentBrush)
+		canvas.DrawPolygon(poly, gxui.CreatePen(1, gxui.Red), gxui.TransparentBrush)
 	}
 
 	canvas.Complete()
@@ -111,10 +130,11 @@ func appMain(driver gxui.Driver) {
 	window.OnClose(driver.Terminate)
 }
 
-/*
-func route(src, dest math.Point) {
-	// Phase 0. Draw Triangle Id Graph
-
+func route(driver gxui.Driver, src_id, dest_id int32, src, dest Point3) (canvas gxui.Canvas) {
+	defer func() {
+		canvas.Complete()
+	}()
+	canvas = driver.CreateCanvas(math.Size{W: 800, H: 600})
 	// Phase 1. Use Dijkstra to find shortest path on Triangles
 	d := Dijkstra{}
 	d.CreateMatrixFromMesh(Mesh{vertices, triangles})
@@ -122,29 +142,30 @@ func route(src, dest math.Point) {
 
 	// Phase 2.  construct path indices
 	// Check if this path include src & dest
-	cur_id, ok := dest_id, false
-	for cur_id, ok := path[cur_id]; ok; cur_id, ok = path[cur_id] {
-		path_triangle = append(cur_id, path_triangle)
+	var path_triangle [][3]int32
+	cur_id, ok := path[dest_id]
+	for ; ok; cur_id, ok = path[cur_id] {
+		path_triangle = append([][3]int32{triangles[cur_id]}, path_triangle...)
 		if cur_id == src_id { // complete route
 			break
 		}
 	}
 	if cur_id != src_id { // incomplete route
-		return
+		return canvas
 	}
 
 	// Phase 3. use Navmesh to construct line
-	start, end := &Point3{X: src.X, Y: src.Y}, &Point3{X: src.X, Y: src.Y}
+	start, end := &Point3{X: src.X, Y: src.Y}, &Point3{X: dest.X, Y: dest.Y}
 	nm := NavMesh{}
-	trilist := TriangleList{vertices, path_indices}
+	trilist := TriangleList{vertices, path_triangle}
 	r, _ := nm.Route(trilist, start, end)
 
 	var poly []gxui.PolygonVertex
 	poly = append(poly,
 		gxui.PolygonVertex{
 			Position: math.Point{
-				int(start.X),
-				int(start.Y),
+				int(SCALE_FACTOR * start.X),
+				int(SCALE_FACTOR * start.Y),
 			},
 			RoundedRadius: 0})
 
@@ -152,24 +173,47 @@ func route(src, dest math.Point) {
 		poly = append(poly,
 			gxui.PolygonVertex{
 				Position: math.Point{
-					int(r.Line[k].X),
-					int(r.Line[k].Y),
+					int(SCALE_FACTOR * r.Line[k].X),
+					int(SCALE_FACTOR * r.Line[k].Y),
 				},
 				RoundedRadius: 0})
 	}
 	poly = append(poly,
 		gxui.PolygonVertex{
 			Position: math.Point{
-				int(end.X),
-				int(end.Y),
+				int(SCALE_FACTOR * end.X),
+				int(SCALE_FACTOR * end.Y),
 			},
 			RoundedRadius: 0})
 
-	canvas.DrawLines(poly, gxui.CreatePen(0.01, gxui.Green))
-
+	canvas.DrawLines(poly, gxui.CreatePen(1, gxui.Green))
+	return
 }
-*/
 
+func sign(p1, p2, p3 Point3) float32 {
+	return (p1.X-p3.X)*(p2.Y-p3.Y) - (p2.X-p3.X)*(p1.Y-p3.Y)
+}
+
+func inside(pt, v1, v2, v3 Point3) bool {
+	b1 := sign(pt, v1, v2) <= 0
+	b2 := sign(pt, v2, v3) <= 0
+	b3 := sign(pt, v3, v1) <= 0
+	return ((b1 == b2) && (b2 == b3))
+}
+
+func getTriangleId(pt Point3) (id int32) {
+	for k := 0; k < len(triangles); k++ {
+		if inside(pt,
+			Point3{X: vertices[triangles[k][0]].X, Y: vertices[triangles[k][0]].Y},
+			Point3{X: vertices[triangles[k][1]].X, Y: vertices[triangles[k][1]].Y},
+			Point3{X: vertices[triangles[k][2]].X, Y: vertices[triangles[k][2]].Y}) {
+			return int32(k)
+		}
+	}
+	return -1
+}
+
+/*
 func getTriangleId(driver gxui.Driver, src, des math.Point) {
 	canvas := driver.CreateCanvas(math.Size{W: 1000, H: 1000})
 	canvas.Clear(gxui.Color{0, 0, 0, 1})
@@ -206,4 +250,4 @@ func getTriangleId(driver gxui.Driver, src, des math.Point) {
 	image := theme.CreateImage()
 	image.SetCanvas(canvas)
 	fmt.Println(image.Texture()) //.Image().At(src.X, src.Y))
-}
+}*/

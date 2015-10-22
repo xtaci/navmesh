@@ -10,7 +10,7 @@ import ()
 
 // Triangle Heap
 type WeightedTriangle struct {
-	id     int // triangle id
+	id     int32 // triangle id
 	weight float32
 }
 
@@ -48,12 +48,12 @@ type Mesh struct {
 
 // Dijkstra
 type Dijkstra struct {
-	Matrix map[int][]WeightedTriangle // all edge for nodes
+	Matrix map[int32][]WeightedTriangle // all edge for nodes
 }
 
 // create neighbour matrix
 func (d *Dijkstra) CreateMatrixFromMesh(mesh Mesh) {
-	d.Matrix = make(map[int][]WeightedTriangle)
+	d.Matrix = make(map[int32][]WeightedTriangle)
 	for i := 0; i < len(mesh.Triangles); i++ {
 		for j := 0; j < len(mesh.Triangles); j++ {
 			if i == j {
@@ -66,7 +66,7 @@ func (d *Dijkstra) CreateMatrixFromMesh(mesh Mesh) {
 				x2 := (mesh.Vertices[mesh.Triangles[j][0]].X + mesh.Vertices[mesh.Triangles[j][1]].X + mesh.Vertices[mesh.Triangles[j][2]].X) / 3.0
 				y2 := (mesh.Vertices[mesh.Triangles[j][0]].Y + mesh.Vertices[mesh.Triangles[j][1]].Y + mesh.Vertices[mesh.Triangles[j][2]].Y) / 3.0
 				weight := float32(math.Sqrt(float64((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1))))
-				d.Matrix[i] = append(d.Matrix[i], WeightedTriangle{j, weight})
+				d.Matrix[int32(i)] = append(d.Matrix[int32(i)], WeightedTriangle{int32(j), weight})
 			}
 		}
 	}
@@ -84,19 +84,19 @@ func intersect(a [3]int32, b [3]int32) []int32 {
 	return inter
 }
 
-func (d *Dijkstra) Run(src_id int) map[int]int {
+func (d *Dijkstra) Run(src_id int32) map[int32]int32 {
 	// triangle heap
 	h := &TriangleHeap{}
 	heap.Init(h)
 
 	// min distance records
-	dist := make(map[int]float32)
+	dist := make(map[int32]float32)
 
 	// previous map
-	prev := make(map[int]int)
+	prev := make(map[int32]int32)
 
 	// visit map
-	visited := make(map[int]bool)
+	visited := make(map[int32]bool)
 
 	// set initial distance to each node as MaxFloat32
 	for k := range d.Matrix {

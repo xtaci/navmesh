@@ -31,7 +31,7 @@ func (nm *NavMesh) Route(list TriangleList, start, end *Point3) (*Path, error) {
 	border := nm.create_border(list.Triangles)
 	// 目标点
 	vertices := append(list.Vertices, *end)
-	border = append(border, int32(len(vertices)), int32(len(vertices)))
+	border = append(border, int32(len(vertices))-1, int32(len(vertices))-1)
 
 	// 第一个可视区域
 	line_start := start
