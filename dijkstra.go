@@ -42,8 +42,8 @@ func (th *TriangleHeap) Pop() interface{} {
 }
 
 type Mesh struct {
-	Vertices []Point3 // triangle list, index start from 0
-	Indices  []int
+	Vertices  []Point3   // vertices
+	Triangles [][3]int32 // triangles
 }
 
 // Dijkstra
@@ -54,17 +54,17 @@ type Dijkstra struct {
 // create neighbour matrix
 func (d *Dijkstra) CreateMatrixFromMesh(mesh Mesh) {
 	d.Matrix = make(map[int][]WeightedTriangle)
-	for i := 0; i < len(mesh.Indices); i += 3 {
-		for j := 0; j < len(mesh.Indices); j += 3 {
+	for i := 0; i < len(mesh.Triangles); i++ {
+		for j := 0; j < len(mesh.Triangles); j++ {
 			if i == j {
 				continue
 			}
 
-			if len(intersect(mesh.Indices[i:i+3], mesh.Indices[j:j+3])) == 2 {
-				x1 := (mesh.Vertices[mesh.Indices[i]].X + mesh.Vertices[mesh.Indices[i+1]].X + mesh.Vertices[mesh.Indices[i+2]].X) / 3.0
-				y1 := (mesh.Vertices[mesh.Indices[i]].Y + mesh.Vertices[mesh.Indices[i+1]].Y + mesh.Vertices[mesh.Indices[i+2]].Y) / 3.0
-				x2 := (mesh.Vertices[mesh.Indices[j]].X + mesh.Vertices[mesh.Indices[j+1]].X + mesh.Vertices[mesh.Indices[j+2]].X) / 3.0
-				y2 := (mesh.Vertices[mesh.Indices[j]].Y + mesh.Vertices[mesh.Indices[j+1]].Y + mesh.Vertices[mesh.Indices[j+2]].Y) / 3.0
+			if len(intersect(mesh.Triangles[i], mesh.Triangles[j])) == 2 {
+				x1 := (mesh.Vertices[mesh.Triangles[i][0]].X + mesh.Vertices[mesh.Triangles[i][1]].X + mesh.Vertices[mesh.Triangles[i][2]].X) / 3.0
+				y1 := (mesh.Vertices[mesh.Triangles[i][0]].Y + mesh.Vertices[mesh.Triangles[i][1]].Y + mesh.Vertices[mesh.Triangles[i][2]].Y) / 3.0
+				x2 := (mesh.Vertices[mesh.Triangles[j][0]].X + mesh.Vertices[mesh.Triangles[j][1]].X + mesh.Vertices[mesh.Triangles[j][2]].X) / 3.0
+				y2 := (mesh.Vertices[mesh.Triangles[j][0]].Y + mesh.Vertices[mesh.Triangles[j][1]].Y + mesh.Vertices[mesh.Triangles[j][2]].Y) / 3.0
 				weight := float32(math.Sqrt(float64((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1))))
 				d.Matrix[i] = append(d.Matrix[i], WeightedTriangle{j, weight})
 			}
@@ -72,8 +72,8 @@ func (d *Dijkstra) CreateMatrixFromMesh(mesh Mesh) {
 	}
 }
 
-func intersect(a []int, b []int) []int {
-	var inter []int
+func intersect(a [3]int32, b [3]int32) []int32 {
+	var inter []int32
 	for i := range a {
 		for j := range b {
 			if a[i] == b[j] {

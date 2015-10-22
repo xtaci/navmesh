@@ -11,12 +11,12 @@ var (
 )
 
 type TriangleList struct {
-	Vertices []Point3
-	Indices  []int
+	Vertices  []Point3
+	Triangles [][3]int32 // triangles
 }
 
 type BorderList struct {
-	Indices []int // 2pt as border
+	Indices []int32 // 2pt as border
 }
 
 type Path struct {
@@ -28,10 +28,10 @@ type NavMesh struct{}
 func (nm *NavMesh) Route(list TriangleList, start, end *Point3) (*Path, error) {
 	r := Path{}
 	// 计算临边
-	border := nm.create_border(list.Indices)
-	// 目标点做为一个边
+	border := nm.create_border(list.Triangles)
+	// 目标点
 	vertices := append(list.Vertices, *end)
-	border = append(border, len(vertices)-1, len(vertices)-1)
+	border = append(border, int32(len(vertices)), int32(len(vertices)))
 
 	// 第一个可视区域
 	line_start := start
@@ -89,13 +89,11 @@ func (nm *NavMesh) Route(list TriangleList, start, end *Point3) (*Path, error) {
 	return &r, nil
 }
 
-func (nm *NavMesh) create_border(indices []int) []int {
-	var border []int
-	for k := 0; k < len(indices)-3; k += 3 {
-		tri1 := indices[k : k+3]
-		tri2 := indices[k+3 : k+6]
-		for _, i := range tri1 {
-			for _, j := range tri2 {
+func (nm *NavMesh) create_border(list [][3]int32) []int32 {
+	var border []int32
+	for k := 0; k < len(list)-1; k++ {
+		for _, i := range list[k] {
+			for _, j := range list[k+1] {
 				if i == j {
 					border = append(border, i)
 				}
@@ -105,7 +103,7 @@ func (nm *NavMesh) create_border(indices []int) []int {
 	return border
 }
 
-func (nm *NavMesh) update_vis(v0 *Point3, vertices []Point3, indices []int, i1, i2 int) (l, r *Vector3, left, right int) {
+func (nm *NavMesh) update_vis(v0 *Point3, vertices []Point3, indices []int32, i1, i2 int) (l, r *Vector3, left, right int) {
 	var left_vec, right_vec, res Vector3
 	P3Sub(&left_vec, &vertices[indices[i1]], v0)
 	P3Sub(&right_vec, &vertices[indices[i2]], v0)
