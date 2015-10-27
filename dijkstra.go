@@ -6,12 +6,12 @@ import (
 	"math"
 )
 
-const LARGE_NUMBER = 999999
+const LARGE_NUMBER = math.MaxFloat32
 
 // Triangle Heap
 type WeightedTriangle struct {
 	id     int32 // triangle id
-	weight float32
+	weight float64
 }
 
 type TriangleHeap struct {
@@ -23,7 +23,7 @@ func (th *TriangleHeap) Len() int {
 }
 
 func (th *TriangleHeap) Less(i, j int) bool {
-	return th.triangles[i].weight > th.triangles[j].weight
+	return th.triangles[i].weight < th.triangles[j].weight
 }
 
 func (th *TriangleHeap) Swap(i, j int) {
@@ -41,11 +41,11 @@ func (th *TriangleHeap) Pop() interface{} {
 	return x
 }
 
-func (th *TriangleHeap) DecreaseKey(id int32, weight float32) {
+func (th *TriangleHeap) DecreaseKey(id int32, weight float64) {
 	for k := range th.triangles {
 		if th.triangles[k].id == id {
-			heap.Remove(th, k)
-			heap.Push(th, WeightedTriangle{id, weight})
+			th.triangles[k] = WeightedTriangle{id, weight}
+			heap.Fix(th, k)
 			return
 		}
 	}
@@ -75,7 +75,7 @@ func (d *Dijkstra) CreateMatrixFromMesh(mesh Mesh) {
 				y1 := (mesh.Vertices[mesh.Triangles[i][0]].Y + mesh.Vertices[mesh.Triangles[i][1]].Y + mesh.Vertices[mesh.Triangles[i][2]].Y) / 3.0
 				x2 := (mesh.Vertices[mesh.Triangles[j][0]].X + mesh.Vertices[mesh.Triangles[j][1]].X + mesh.Vertices[mesh.Triangles[j][2]].X) / 3.0
 				y2 := (mesh.Vertices[mesh.Triangles[j][0]].Y + mesh.Vertices[mesh.Triangles[j][1]].Y + mesh.Vertices[mesh.Triangles[j][2]].Y) / 3.0
-				weight := float32(math.Sqrt(float64((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1))))
+				weight := math.Sqrt(float64((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1)))
 				d.Matrix[int32(i)] = append(d.Matrix[int32(i)], WeightedTriangle{int32(j), weight})
 			}
 		}
@@ -103,7 +103,7 @@ func (d *Dijkstra) Run(src_id int32) map[int32]int32 {
 	heap.Init(h)
 
 	// min distance records
-	dist := make(map[int32]float32)
+	dist := make(map[int32]float64)
 
 	// previous map
 	prev := make(map[int32]int32)
@@ -123,7 +123,7 @@ func (d *Dijkstra) Run(src_id int32) map[int32]int32 {
 
 	for h.Len() > 0 { // for every un-visited vertex, try relaxing the path
 		// pop the min element
-		u := h.Pop().(WeightedTriangle)
+		u := heap.Pop(h).(WeightedTriangle)
 		if visited[u.id] {
 			continue
 		}
