@@ -3,7 +3,9 @@ package navmesh
 import (
 	"container/heap"
 	. "github.com/spate/vectormath"
+	//	"log"
 	"math"
+	//	"time"
 )
 
 const LARGE_NUMBER = math.MaxInt32
@@ -57,6 +59,8 @@ func (th *TriangleHeap) DecreaseKey(id int32, weight uint32) {
 		th.triangles[index].weight = weight
 		heap.Fix(th, index)
 		return
+	} else {
+		heap.Push(th, WeightedTriangle{id, weight})
 	}
 }
 
@@ -103,27 +107,28 @@ func intersect(a [3]int32, b [3]int32) []int32 {
 	return inter
 }
 
-func (d *Dijkstra) Run(src_id int32) map[int32]int32 {
+func (d *Dijkstra) Run(src_id int32) []int32 {
 	// triangle heap
 	h := NewTriangleHeap()
 	// min distance records
 	dist := make([]uint32, len(d.Matrix))
-	// previous map
-	prev := make(map[int32]int32)
+	for i := 0; i < len(dist); i++ {
+		dist[i] = LARGE_NUMBER
+	}
+	// previous
+	prev := make([]int32, len(d.Matrix))
+	for i := 0; i < len(prev); i++ {
+		prev[i] = -1
+	}
 	// visit map
 	visited := make([]bool, len(d.Matrix))
 
-	// set initial distance to a very large value
-	for k := range d.Matrix {
-		dist[k] = LARGE_NUMBER
-		heap.Push(h, WeightedTriangle{k, LARGE_NUMBER})
-	}
 	// source vertex, the first vertex in Heap
-	h.DecreaseKey(src_id, 0)
 	dist[src_id] = 0
+	heap.Push(h, WeightedTriangle{src_id, 0})
 
 	for h.Len() > 0 { // for every un-visited vertex, try relaxing the path
-		//		t0 := time.Now()
+		//t0 := time.Now()
 		// pop the min element
 		u := heap.Pop(h).(WeightedTriangle)
 		if visited[u.id] {
@@ -140,7 +145,9 @@ func (d *Dijkstra) Run(src_id int32) map[int32]int32 {
 			if alt < dist[v.id] {
 				dist[v.id] = alt
 				prev[v.id] = u.id
-				h.DecreaseKey(v.id, alt)
+				if !visited[v.id] {
+					h.DecreaseKey(v.id, alt)
+				}
 			}
 		}
 		//		log.Println(time.Now().Sub(t0))

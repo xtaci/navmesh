@@ -106,7 +106,35 @@ func route(driver gxui.Driver, src_id, dest_id int32, src, dest Point3) (canvas 
 		canvas.Complete()
 	}()
 	canvas = driver.CreateCanvas(math.Size{W: 800, H: 600})
+
 	t0 := time.Now()
+	for i := 0; i < 1000; i++ {
+		// Phase 1. Use Dijkstra to find shortest path on Triangles
+		path := dijkstra.Run(src_id)
+
+		// Phase 2.  construct path indices
+		// Check if this path include src & dest
+		path_triangle := [][3]int32{triangles[dest_id]}
+		prev_id := dest_id
+		for {
+			cur_id := path[prev_id]
+			if cur_id == -1 {
+				return canvas
+			}
+			path_triangle = append([][3]int32{triangles[cur_id]}, path_triangle...)
+			if cur_id == src_id {
+				break
+			}
+			prev_id = cur_id
+		}
+
+		// Phase 3. use Navmesh to construct line
+		start, end := &Point3{X: src.X, Y: src.Y}, &Point3{X: dest.X, Y: dest.Y}
+		nm := NavMesh{}
+		trilist := TriangleList{vertices, path_triangle}
+		nm.Route(trilist, start, end)
+	}
+	log.Println("navmesh time:", time.Now().Sub(t0))
 	// Phase 1. Use Dijkstra to find shortest path on Triangles
 	path := dijkstra.Run(src_id)
 
@@ -115,8 +143,8 @@ func route(driver gxui.Driver, src_id, dest_id int32, src, dest Point3) (canvas 
 	path_triangle := [][3]int32{triangles[dest_id]}
 	prev_id := dest_id
 	for {
-		cur_id, ok := path[prev_id]
-		if !ok {
+		cur_id := path[prev_id]
+		if cur_id == -1 {
 			return canvas
 		}
 		path_triangle = append([][3]int32{triangles[cur_id]}, path_triangle...)
@@ -131,7 +159,6 @@ func route(driver gxui.Driver, src_id, dest_id int32, src, dest Point3) (canvas 
 	nm := NavMesh{}
 	trilist := TriangleList{vertices, path_triangle}
 	r, _ := nm.Route(trilist, start, end)
-	log.Println("navmesh time:", time.Now().Sub(t0))
 
 	var poly []gxui.PolygonVertex
 	poly = append(poly,
