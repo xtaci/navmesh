@@ -6,12 +6,12 @@ import (
 	"math"
 )
 
-const LARGE_NUMBER = math.MaxFloat32
+const LARGE_NUMBER = math.MaxInt32
 
 // Triangle Heap
 type WeightedTriangle struct {
 	id     int32 // triangle id
-	weight float64
+	weight uint32
 }
 
 type TriangleHeap struct {
@@ -52,9 +52,9 @@ func (th *TriangleHeap) Pop() interface{} {
 	return x
 }
 
-func (th *TriangleHeap) DecreaseKey(id int32, weight float64) {
+func (th *TriangleHeap) DecreaseKey(id int32, weight uint32) {
 	if index, ok := th.indices[id]; ok {
-		th.triangles[index] = WeightedTriangle{id, weight}
+		th.triangles[index].weight = weight
 		heap.Fix(th, index)
 		return
 	}
@@ -85,7 +85,7 @@ func (d *Dijkstra) CreateMatrixFromMesh(mesh Mesh) {
 				x2 := (mesh.Vertices[mesh.Triangles[j][0]].X + mesh.Vertices[mesh.Triangles[j][1]].X + mesh.Vertices[mesh.Triangles[j][2]].X) / 3.0
 				y2 := (mesh.Vertices[mesh.Triangles[j][0]].Y + mesh.Vertices[mesh.Triangles[j][1]].Y + mesh.Vertices[mesh.Triangles[j][2]].Y) / 3.0
 				weight := math.Sqrt(float64((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1)))
-				d.Matrix[int32(i)] = append(d.Matrix[int32(i)], WeightedTriangle{int32(j), weight})
+				d.Matrix[int32(i)] = append(d.Matrix[int32(i)], WeightedTriangle{int32(j), uint32(weight)})
 			}
 		}
 	}
@@ -106,28 +106,24 @@ func intersect(a [3]int32, b [3]int32) []int32 {
 func (d *Dijkstra) Run(src_id int32) map[int32]int32 {
 	// triangle heap
 	h := NewTriangleHeap()
-	heap.Init(h)
-
 	// min distance records
-	dist := make(map[int32]float64)
-
+	dist := make([]uint32, len(d.Matrix))
 	// previous map
 	prev := make(map[int32]int32)
-
 	// visit map
-	visited := make(map[int32]bool)
+	visited := make([]bool, len(d.Matrix))
 
 	// set initial distance to a very large value
 	for k := range d.Matrix {
 		dist[k] = LARGE_NUMBER
 		heap.Push(h, WeightedTriangle{k, LARGE_NUMBER})
 	}
-
 	// source vertex, the first vertex in Heap
 	h.DecreaseKey(src_id, 0)
-	dist[src_id] = 0.0
+	dist[src_id] = 0
 
 	for h.Len() > 0 { // for every un-visited vertex, try relaxing the path
+		//		t0 := time.Now()
 		// pop the min element
 		u := heap.Pop(h).(WeightedTriangle)
 		if visited[u.id] {
@@ -147,6 +143,7 @@ func (d *Dijkstra) Run(src_id int32) map[int32]int32 {
 				h.DecreaseKey(v.id, alt)
 			}
 		}
+		//		log.Println(time.Now().Sub(t0))
 	}
 	return prev
 }

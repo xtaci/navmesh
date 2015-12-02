@@ -59,7 +59,7 @@ func appMain(driver gxui.Driver) {
 			dest = pt
 		}
 		if !isStart {
-			if id != -1 {
+			if src_id != -1 && dest_id != -1 {
 				canvas := route(driver, src_id, dest_id, src, dest)
 				image := theme.CreateImage()
 				image.SetCanvas(canvas)
@@ -112,16 +112,18 @@ func route(driver gxui.Driver, src_id, dest_id int32, src, dest Point3) (canvas 
 
 	// Phase 2.  construct path indices
 	// Check if this path include src & dest
-	var path_triangle [][3]int32
-	cur_id, ok := path[dest_id]
-	for ; ok; cur_id, ok = path[cur_id] {
+	path_triangle := [][3]int32{triangles[dest_id]}
+	prev_id := dest_id
+	for {
+		cur_id, ok := path[prev_id]
+		if !ok {
+			return canvas
+		}
 		path_triangle = append([][3]int32{triangles[cur_id]}, path_triangle...)
-		if cur_id == src_id { // complete route
+		if cur_id == src_id {
 			break
 		}
-	}
-	if cur_id != src_id && src_id != dest_id { // incomplete route
-		return canvas
+		prev_id = cur_id
 	}
 
 	// Phase 3. use Navmesh to construct line
