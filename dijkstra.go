@@ -3,9 +3,7 @@ package navmesh
 import (
 	"container/heap"
 	. "github.com/spate/vectormath"
-	//	"log"
 	"math"
-	//	"time"
 )
 
 const LARGE_NUMBER = math.MaxInt32
@@ -128,7 +126,6 @@ func (d *Dijkstra) Run(src_id int32) []int32 {
 	heap.Push(h, WeightedTriangle{src_id, 0})
 
 	for h.Len() > 0 { // for every un-visited vertex, try relaxing the path
-		//t0 := time.Now()
 		// pop the min element
 		u := heap.Pop(h).(WeightedTriangle)
 		if visited[u.id] {
@@ -150,7 +147,6 @@ func (d *Dijkstra) Run(src_id int32) []int32 {
 				}
 			}
 		}
-		//		log.Println(time.Now().Sub(t0))
 	}
 	return prev
 }
