@@ -16,6 +16,13 @@ type WeightedTriangle struct {
 
 type TriangleHeap struct {
 	triangles []WeightedTriangle
+	indices   map[int32]int
+}
+
+func NewTriangleHeap() *TriangleHeap {
+	h := new(TriangleHeap)
+	h.indices = make(map[int32]int)
+	return h
 }
 
 func (th *TriangleHeap) Len() int {
@@ -28,10 +35,14 @@ func (th *TriangleHeap) Less(i, j int) bool {
 
 func (th *TriangleHeap) Swap(i, j int) {
 	th.triangles[i], th.triangles[j] = th.triangles[j], th.triangles[i]
+	th.indices[th.triangles[i].id] = i
+	th.indices[th.triangles[j].id] = j
 }
 
 func (th *TriangleHeap) Push(x interface{}) {
 	th.triangles = append(th.triangles, x.(WeightedTriangle))
+	n := len(th.triangles)
+	th.indices[th.triangles[n-1].id] = n - 1
 }
 
 func (th *TriangleHeap) Pop() interface{} {
@@ -42,12 +53,10 @@ func (th *TriangleHeap) Pop() interface{} {
 }
 
 func (th *TriangleHeap) DecreaseKey(id int32, weight float64) {
-	for k := range th.triangles {
-		if th.triangles[k].id == id {
-			th.triangles[k] = WeightedTriangle{id, weight}
-			heap.Fix(th, k)
-			return
-		}
+	if index, ok := th.indices[id]; ok {
+		th.triangles[index] = WeightedTriangle{id, weight}
+		heap.Fix(th, index)
+		return
 	}
 }
 
@@ -95,11 +104,8 @@ func intersect(a [3]int32, b [3]int32) []int32 {
 }
 
 func (d *Dijkstra) Run(src_id int32) map[int32]int32 {
-	defer func() {
-		println("run ok")
-	}()
 	// triangle heap
-	h := &TriangleHeap{}
+	h := NewTriangleHeap()
 	heap.Init(h)
 
 	// min distance records

@@ -10,6 +10,7 @@ import (
 	. "github.com/xtaci/navmesh"
 	"log"
 	"os"
+	"time"
 )
 
 type List struct {
@@ -105,6 +106,7 @@ func route(driver gxui.Driver, src_id, dest_id int32, src, dest Point3) (canvas 
 		canvas.Complete()
 	}()
 	canvas = driver.CreateCanvas(math.Size{W: 800, H: 600})
+	t0 := time.Now()
 	// Phase 1. Use Dijkstra to find shortest path on Triangles
 	path := dijkstra.Run(src_id)
 
@@ -121,13 +123,13 @@ func route(driver gxui.Driver, src_id, dest_id int32, src, dest Point3) (canvas 
 	if cur_id != src_id && src_id != dest_id { // incomplete route
 		return canvas
 	}
-	log.Println(path_triangle)
 
 	// Phase 3. use Navmesh to construct line
 	start, end := &Point3{X: src.X, Y: src.Y}, &Point3{X: dest.X, Y: dest.Y}
 	nm := NavMesh{}
 	trilist := TriangleList{vertices, path_triangle}
 	r, _ := nm.Route(trilist, start, end)
+	log.Println("navmesh time:", time.Now().Sub(t0))
 
 	var poly []gxui.PolygonVertex
 	poly = append(poly,
@@ -178,42 +180,3 @@ func getTriangleId(pt Point3) (id int32) {
 	}
 	return -1
 }
-
-/*
-func getTriangleId(driver gxui.Driver, src, des math.Point) {
-	canvas := driver.CreateCanvas(math.Size{W: 1000, H: 1000})
-	canvas.Clear(gxui.Color{0, 0, 0, 1})
-
-	// draw mesh with id
-	for k := 0; k < len(triangles); k++ {
-		poly := []gxui.PolygonVertex{
-			gxui.PolygonVertex{
-				Position: math.Point{
-					int(vertices[triangles[k][0]].X),
-					int(vertices[triangles[k][0]].Y),
-				},
-				RoundedRadius: 0},
-
-			gxui.PolygonVertex{
-				Position: math.Point{
-					int(vertices[triangles[k][1]].X),
-					int(vertices[triangles[k][1]].Y),
-				},
-				RoundedRadius: 0},
-
-			gxui.PolygonVertex{
-				Position: math.Point{
-					int(vertices[triangles[k][2]].X),
-					int(vertices[triangles[k][2]].Y),
-				},
-				RoundedRadius: 0},
-		}
-		color := gxui.Color{float32(k + 1), 0.0, 0.0, 1.0}
-		canvas.DrawPolygon(poly, gxui.CreatePen(0.01, color), gxui.CreateBrush(color))
-	}
-	canvas.Complete()
-	theme := flags.CreateTheme(driver)
-	image := theme.CreateImage()
-	image.SetCanvas(canvas)
-	fmt.Println(image.Texture()) //.Image().At(src.X, src.Y))
-}*/
