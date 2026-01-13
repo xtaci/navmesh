@@ -2,8 +2,9 @@ package navmesh
 
 import (
 	"container/heap"
-	. "github.com/spate/vectormath"
 	"math"
+
+	. "github.com/spate/vectormath"
 )
 
 const LARGE_NUMBER = math.MaxInt32
@@ -65,19 +66,33 @@ func (th *TriangleHeap) DecreaseKey(id int32, weight uint32) {
 type Mesh struct {
 	Vertices  []Point3   // vertices
 	Triangles [][3]int32 // triangles
+	Obstacles map[int32]struct{}
 }
 
 // Dijkstra
 type Dijkstra struct {
-	Matrix map[int32][]WeightedTriangle // all edge for nodes
+	Matrix    map[int32][]WeightedTriangle // all edge for nodes
+	blocked   map[int32]struct{}
+	nodeCount int
 }
 
 // create neighbour matrix
 func (d *Dijkstra) CreateMatrixFromMesh(mesh Mesh) {
 	d.Matrix = make(map[int32][]WeightedTriangle)
+	d.blocked = make(map[int32]struct{})
+	for id := range mesh.Obstacles {
+		d.blocked[id] = struct{}{}
+	}
+	d.nodeCount = len(mesh.Triangles)
 	for i := 0; i < len(mesh.Triangles); i++ {
+		if _, skip := d.blocked[int32(i)]; skip {
+			continue
+		}
 		for j := 0; j < len(mesh.Triangles); j++ {
 			if i == j {
+				continue
+			}
+			if _, skip := d.blocked[int32(j)]; skip {
 				continue
 			}
 
@@ -109,17 +124,23 @@ func (d *Dijkstra) Run(src_id int32) []int32 {
 	// triangle heap
 	h := NewTriangleHeap()
 	// min distance records
-	dist := make([]uint32, len(d.Matrix))
+	dist := make([]uint32, d.nodeCount)
 	for i := 0; i < len(dist); i++ {
 		dist[i] = LARGE_NUMBER
 	}
 	// previous
-	prev := make([]int32, len(d.Matrix))
+	prev := make([]int32, d.nodeCount)
 	for i := 0; i < len(prev); i++ {
 		prev[i] = -1
 	}
 	// visit map
-	visited := make([]bool, len(d.Matrix))
+	visited := make([]bool, d.nodeCount)
+	if src_id < 0 || int(src_id) >= len(dist) {
+		return prev
+	}
+	if _, blocked := d.blocked[src_id]; blocked {
+		return prev
+	}
 
 	// source vertex, the first vertex in Heap
 	dist[src_id] = 0
@@ -138,6 +159,12 @@ func (d *Dijkstra) Run(src_id int32) []int32 {
 
 		// for each neighbor v of u:
 		for _, v := range d.Matrix[u.id] {
+			if v.id < 0 || int(v.id) >= len(prev) {
+				continue
+			}
+			if _, blocked := d.blocked[v.id]; blocked {
+				continue
+			}
 			alt := dist_u + v.weight // from src->u->v
 			if alt < dist[v.id] {
 				dist[v.id] = alt

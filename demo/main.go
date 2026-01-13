@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"image"
 	"image/color"
 	"log"
+	"math"
 	"os"
 
 	"fyne.io/fyne/v2"
@@ -22,9 +24,16 @@ const (
 )
 
 type List struct {
-	Vertices  []Point3
-	Triangles [][3]int32
+	Vertices          []Point3
+	Triangles         [][3]int32
+	ObstacleTriangles []int32 `json:"ObstacleTriangles"`
 }
+
+var (
+	walkableFill = color.NRGBA{R: 72, G: 160, B: 255, A: 210}
+	obstacleFill = color.NRGBA{R: 255, G: 110, B: 92, A: 255}
+	edgeColor    = color.NRGBA{R: 90, G: 96, B: 120, A: 255}
+)
 
 func main() {
 	meshFile, err := os.Open("mesh.json")
@@ -38,14 +47,21 @@ func main() {
 		log.Fatal(err)
 	}
 
+	obstacleSet := make(map[int32]struct{}, len(list.ObstacleTriangles))
+	for _, id := range list.ObstacleTriangles {
+		if id >= 0 {
+			obstacleSet[id] = struct{}{}
+		}
+	}
+
 	dijkstra := &Dijkstra{}
-	dijkstra.CreateMatrixFromMesh(Mesh{Vertices: list.Vertices, Triangles: list.Triangles})
+	dijkstra.CreateMatrixFromMesh(Mesh{Vertices: list.Vertices, Triangles: list.Triangles, Obstacles: obstacleSet})
 
 	application := app.New()
 	window := application.NewWindow("navmesh")
 	window.Resize(fyne.NewSize(windowWidth, windowHeight))
 
-	navWidget := newNavMeshWidget(list.Vertices, list.Triangles, dijkstra)
+	navWidget := newNavMeshWidget(list.Vertices, list.Triangles, obstacleSet, dijkstra)
 	window.SetContent(navWidget)
 	window.ShowAndRun()
 }
@@ -56,6 +72,7 @@ type navMeshWidget struct {
 	background     *canvas.Rectangle
 	vertices       []Point3
 	triangles      [][3]int32
+	obstacles      map[int32]struct{}
 	dijkstra       *Dijkstra
 	selectingStart bool
 	startPoint     Point3
@@ -66,7 +83,7 @@ type navMeshWidget struct {
 	pathObjects    []fyne.CanvasObject
 }
 
-func newNavMeshWidget(vertices []Point3, triangles [][3]int32, dijkstra *Dijkstra) *navMeshWidget {
+func newNavMeshWidget(vertices []Point3, triangles [][3]int32, obstacles map[int32]struct{}, dijkstra *Dijkstra) *navMeshWidget {
 	bg := canvas.NewRectangle(color.NRGBA{R: 18, G: 18, B: 26, A: 255})
 	content := container.NewWithoutLayout(bg)
 	w := &navMeshWidget{
@@ -74,6 +91,7 @@ func newNavMeshWidget(vertices []Point3, triangles [][3]int32, dijkstra *Dijkstr
 		background:     bg,
 		vertices:       vertices,
 		triangles:      triangles,
+		obstacles:      obstacles,
 		dijkstra:       dijkstra,
 		selectingStart: true,
 		startTriangle:  -1,
@@ -84,16 +102,16 @@ func newNavMeshWidget(vertices []Point3, triangles [][3]int32, dijkstra *Dijkstr
 	return w
 }
 
-type navMeshRenderer struct {
-	widget  *navMeshWidget
-	objects []fyne.CanvasObject
-}
-
 func (n *navMeshWidget) CreateRenderer() fyne.WidgetRenderer {
 	return &navMeshRenderer{
 		widget:  n,
 		objects: []fyne.CanvasObject{n.container},
 	}
+}
+
+type navMeshRenderer struct {
+	widget  *navMeshWidget
+	objects []fyne.CanvasObject
 }
 
 func (r *navMeshRenderer) Destroy() {}
@@ -120,28 +138,115 @@ func (r *navMeshRenderer) BackgroundColor() color.Color {
 }
 
 func (n *navMeshWidget) drawMesh() {
-	edgeColor := color.NRGBA{R: 120, G: 130, B: 150, A: 255}
-	for _, tri := range n.triangles {
-		pts := []fyne.Position{
-			fyne.NewPos(SCALE_FACTOR*n.vertices[tri[0]].X, SCALE_FACTOR*n.vertices[tri[0]].Y),
-			fyne.NewPos(SCALE_FACTOR*n.vertices[tri[1]].X, SCALE_FACTOR*n.vertices[tri[1]].Y),
-			fyne.NewPos(SCALE_FACTOR*n.vertices[tri[2]].X, SCALE_FACTOR*n.vertices[tri[2]].Y),
+	for idx, tri := range n.triangles {
+		p0 := fyne.NewPos(SCALE_FACTOR*n.vertices[tri[0]].X, SCALE_FACTOR*n.vertices[tri[0]].Y)
+		p1 := fyne.NewPos(SCALE_FACTOR*n.vertices[tri[1]].X, SCALE_FACTOR*n.vertices[tri[1]].Y)
+		p2 := fyne.NewPos(SCALE_FACTOR*n.vertices[tri[2]].X, SCALE_FACTOR*n.vertices[tri[2]].Y)
+		fill := walkableFill
+		if _, blocked := n.obstacles[int32(idx)]; blocked {
+			fill = obstacleFill
 		}
-		for i := 0; i < 3; i++ {
-			next := (i + 1) % 3
-			line := canvas.NewLine(edgeColor)
-			line.StrokeWidth = 1
-			line.Position1 = pts[i]
-			line.Position2 = pts[next]
-			n.container.Add(line)
+		img := newTriangleImage([3]fyne.Position{p0, p1, p2}, fill)
+		n.container.Add(img)
+		drawTriangleOutline(n.container, [3]fyne.Position{p0, p1, p2})
+	}
+}
+
+func newTriangleImage(pts [3]fyne.Position, fill color.Color) *canvas.Image {
+	minX, minY := pts[0].X, pts[0].Y
+	maxX, maxY := pts[0].X, pts[0].Y
+	for i := 1; i < 3; i++ {
+		if pts[i].X < minX {
+			minX = pts[i].X
+		}
+		if pts[i].Y < minY {
+			minY = pts[i].Y
+		}
+		if pts[i].X > maxX {
+			maxX = pts[i].X
+		}
+		if pts[i].Y > maxY {
+			maxY = pts[i].Y
 		}
 	}
+	width := int(math.Ceil(float64(maxX-minX))) + 1
+	height := int(math.Ceil(float64(maxY-minY))) + 1
+	if width <= 0 {
+		width = 1
+	}
+	if height <= 0 {
+		height = 1
+	}
+	local := [3]fyne.Position{
+		fyne.NewPos(pts[0].X-minX, pts[0].Y-minY),
+		fyne.NewPos(pts[1].X-minX, pts[1].Y-minY),
+		fyne.NewPos(pts[2].X-minX, pts[2].Y-minY),
+	}
+	img := image.NewNRGBA(image.Rect(0, 0, width, height))
+	fillNRGBA := color.NRGBAModel.Convert(fill).(color.NRGBA)
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			if pointInTriangle(float32(x)+0.5, float32(y)+0.5, local) {
+				img.Set(x, y, fillNRGBA)
+			} else {
+				img.Set(x, y, color.NRGBA{0, 0, 0, 0})
+			}
+		}
+	}
+	canvasImg := canvas.NewImageFromImage(img)
+	canvasImg.Move(fyne.NewPos(minX, minY))
+	size := fyne.NewSize(float32(width), float32(height))
+	canvasImg.SetMinSize(size)
+	canvasImg.Resize(size)
+	canvasImg.FillMode = canvas.ImageFillOriginal
+	return canvasImg
+}
+
+func drawTriangleOutline(c *fyne.Container, pts [3]fyne.Position) {
+	for i := 0; i < 3; i++ {
+		next := (i + 1) % 3
+		line := canvas.NewLine(edgeColor)
+		line.StrokeWidth = 1
+		line.Position1 = pts[i]
+		line.Position2 = pts[next]
+		c.Add(line)
+	}
+}
+
+func pointInTriangle(px, py float32, pts [3]fyne.Position) bool {
+	b1 := sameSide(px, py, pts[0], pts[1], pts[2])
+	b2 := sameSide(px, py, pts[1], pts[2], pts[0])
+	b3 := sameSide(px, py, pts[2], pts[0], pts[1])
+	return b1 && b2 && b3
+}
+
+func sameSide(px, py float32, a, b, c fyne.Position) bool {
+	side1 := edgeSign(px, py, a, b)
+	side2 := edgeSign(float32(c.X), float32(c.Y), a, b)
+	if side2 == 0 {
+		return true
+	}
+	if side2 > 0 {
+		return side1 >= 0
+	}
+	return side1 <= 0
+}
+
+func edgeSign(px, py float32, a, b fyne.Position) float32 {
+	ax := float32(a.X)
+	ay := float32(a.Y)
+	bx := float32(b.X)
+	by := float32(b.Y)
+	return (px-bx)*(ay-by) - (ax-bx)*(py-by)
 }
 
 func (n *navMeshWidget) Tapped(ev *fyne.PointEvent) {
 	world := Point3{X: float32(ev.Position.X) / SCALE_FACTOR, Y: float32(ev.Position.Y) / SCALE_FACTOR}
 	tri := n.triangleAt(world)
 	if tri == -1 {
+		return
+	}
+	if _, blocked := n.obstacles[tri]; blocked {
 		return
 	}
 
@@ -221,6 +326,12 @@ func (n *navMeshWidget) drawPath() {
 
 func (n *navMeshWidget) computeRoutePoints(srcID, destID int32, src, dest Point3) []Point3 {
 	if srcID < 0 || destID < 0 || int(srcID) >= len(n.triangles) || int(destID) >= len(n.triangles) {
+		return nil
+	}
+	if _, blocked := n.obstacles[srcID]; blocked {
+		return nil
+	}
+	if _, blocked := n.obstacles[destID]; blocked {
 		return nil
 	}
 
